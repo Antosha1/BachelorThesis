@@ -1,0 +1,315 @@
+\documentclass[10pt,unicode]{beamer}
+\usepackage{cmap}
+\usepackage[T2A]{fontenc}
+\usepackage[cp1251]{inputenc}
+\usepackage[english, russian]{babel}
+\usepackage{amsmath,mathrsfs,amsfonts,amssymb, mathtools}
+\usepackage{graphicx, epsfig}
+\usepackage{subfig}
+\usepackage{wrapfig}
+\usepackage[noend]{algorithmic}
+
+\usepackage{multirow}
+\captionsetup{labelformat=empty}
+\usepackage{wrapfig}
+
+\newcommand{\hchi}{\hat{\boldsymbol{\chi}}}
+\newcommand{\B}{\mathcal{B}}
+\newcommand{\hx}{\hat{x}}
+\newcommand{\hy}{\hat{y}}
+
+\def\algorithmicrequire{\textbf{\textcolor[rgb]{0.00,0.00,1.00}{Вход:}}}
+\def\algorithmicensure{\textbf{\textcolor[rgb]{0.00,0.00,1.00}{Выход:}}}
+
+\usetheme{Warsaw}%{Singapore}%{Warsaw}%{Warsaw}%{Darmstadt}
+\usecolortheme{sidebartab}
+\setbeamertemplate{footline}[author]
+\expandafter\def\expandafter\insertshorttitle\expandafter{%
+	\insertshorttitle\hfill%
+	\insertframenumber\,/\,\inserttotalframenumber}
+
+\definecolor{beamer@blendedblue}{RGB}{68,22,196}
+\graphicspath{{../pics/}}
+% отключить клавиши навигации
+\setbeamertemplate{navigation symbols}{}
+
+%----------------------------------------------------------------------------------------------------------
+\title[Нейронные сети в задаче BioNER]{Разработка и реализация нейросетевой системы для извлечения именованных сущностей генов и мутаций из медицинских текстов}
+\author{Сотников А.Д.}
+\date{30 июня 2020г.}
+\institute[МФТИ]{Московский физико-технический институт \\
+	Факультет управления и прикладной математики\\
+	Кафедра интеллектуальных систем
+	\vspace{0.3cm} \\
+	Научный руководитель д.т.н. С.\,К.\,Дулин \\
+	Научный консультант д.т.н. В.\,Ф.\,Хорошевский
+}
+
+\date{
+	Москва,\\
+	2020\,г.
+}
+
+%----------------------------------------------------------------------------------------------------------
+\begin{document}
+%----------------------------------------------------------------------------------------------------------
+\begin{frame}
+%\thispagestyle{empty}
+\titlepage
+\end{frame}
+%-----------------------------------------------------------------------------------------------------
+\begin{frame}{О задаче}
+\begin{block}{Мотивация}
+	Существующие модели не способны одновременно находить в текстах сущности и генов, и мутаций. Кроме того, они не используют в полной мере контекстную информацию.
+\end{block}
+\begin{block}{Поставленная задача}
+	На вход подается корпус биомедицинских текстов, разбитый на предложения. Требуется найти в нем именованные сущности генов и мутаций, решив задачу разметки последовательности слов.
+\end{block}
+\begin{block}{Предлагается}
+	Реализовать нейронную сеть, которая с помощью контекстной информации каждого слова способна извлекать из биомедицинских текстов рассматриваемые именованные сущности.
+\end{block}
+%\begin{block}{Метод (Анализ спектра свёртки ??????)}
+%	Анализ спектра свёртки ??????
+%\end{block}
+
+\end{frame}
+
+%-----------------------------------------------------------------------------------------------------
+\begin{frame}{}
+	\begin{block}{Сложности}
+		Именованные сущности генов и мутаций могут быть записаны в разных форматах:
+		\begin{itemize}
+			\item \textbf{Standard} -- c.925delA; g.3912G>C; rs206437.
+			\item \textbf{Semi-standard} -- 3992-9g–>a mutation; codon 92, TAC–>TAT.
+			\item \textbf{Natural language} -- deletion of 10 and 8 residues from the N- and C-terminals.	
+		\end{itemize}
+		Серьезные трудности возникают, когда сущность специфицируется на естественном языке.		
+	\end{block}
+\end{frame}
+%-----------------------------------------------------------------------------------------------------
+\begin{frame}{Существующие методы}
+	\textbf{Работы по Gene Mention}
+	\begin{itemize}
+		\item Vocabulary-based  \textit{(BLAST 2000)}
+		\item Rule-based \textit{(ProMiner 2005)}
+		\item ML-based \textit{(GNormPlus 2015)}
+		\item DL-based \textit{(CollaboNet 2018, BioBERT 2019)}
+	\end{itemize}
+	
+	\textbf{Работы по Mutation Mention}
+	\begin{itemize}
+		\item Rule-based \textit{(MutationFinder 2007, SETH 2016)}
+		\item Probabilistic-based \textit{(tmVar 2013, nala 2017)}
+	\end{itemize}
+\end{frame}
+%-----------------------------------------------------------------------------------------------------
+\begin{frame}{Постановка задачи}
+\begin{itemize}
+	\item Дана выборка и множество меток $$\mathcal{D} = \left\{\mathbf{x}_i, \mathbf{{y}_i}\right\}_{i=1}^N, ~~~ \mathcal{K}=\left\{\mathit{{k}_j}\right\}_{j=1}^5$$ где $\mathit{x}_i\in \mathbb{R}^{n_i}$~-- последовательность слов в предложении длины $\mathit{n}_i$, ${y}_i \in \mathbb{R}^{n_i}$~-- соответствующая им последовательность меток, а $k_j\in \left[\textsc{o, b-gene, i-gene, b-mut, i-mut}\right]$.
+	\item Требуется построить модель
+	$$\mathit{a} : (\mathbf{w}, \mathbf{X})\rightarrow\mathbf{y},$$
+	$\mathbf{w} \in \mathbb{W}$~-- параметры модели, $\mathbf{X} = \bigcup_{i=1}^N\bigcup_{j=1}^{n_i} \mathit{x}_j, \mathbf{y} = \bigcup_{i=1}^N\bigcup_{j=1}^{n_i} \mathit{y}_j$.
+	\item Функция ошибки
+	$$\mathcal{L}\left(\mathbf{y}, \mathbf{X}, \mathbf{w}\right)=-\sum_{i=1}^{N}\log(\mathbb{P\{\mathbf{y_{ik}}|\mathbf{x_{i}}\}}).$$
+	\item Решается задача оптимизации: 
+	$$\textbf{w}^* = \underset{\mathbf{w}\in\mathbb{W}}{\text{argmin}}\bigl(\mathcal{L}(\textbf{w})\bigr)$$
+\end{itemize}
+\end{frame}
+%-----------------------------------------------------------------------------------------------------
+\begin{frame}{Архитектура BiLSTM}
+\begin{figure}[h]
+	\begin{minipage}[h]{0.49\linewidth}
+		\center{\includegraphics[width=0.7\linewidth]{lstm.png}}
+	\end{minipage}
+	\hfill
+	\begin{minipage}[h]{0.49\linewidth}
+		\center{\includegraphics[width=1\linewidth]{bilstm.png}}
+	\end{minipage}
+	\label{ris:image3}
+\end{figure}
+
+	\begin{block}{Принцип работы}
+		LSTM помогает сохранять предыдущую относительно текущего слова информацию. При этом, можно параллельно обучить два таких слоя для прямого и обратного предложения, получив скрытое состояние BiLSTM конкатенаций двух состояний LSTM, т.е.$$\forall\mathbf{x}_t\in \mathbf{x} ~~~~ \mathbf{h}_t=[\overrightarrow{\mathbf{h_t}}, \overleftarrow{\mathbf{h_t}}].$$
+	\end{block}
+
+	\begin{block}{Важно}
+		Такая архитектура позволяет запоминать и учитывать предыдущий и будущий контекст текущего слова.
+	\end{block}
+\end{frame}
+%-----------------------------------------------------------------------------------------------------
+\begin{frame}{Условные случайные поля (CRF)}
+	\begin{itemize}
+		\item Имеется $\mathbf{x}=\left(\mathit{x_1, x_2, \dots, x_n}\right)$ -- входное предложение, $\mathbf{y}=\left(\mathit{y_1, y_2, \dots, y_n}\right)$ -- наблюдаемые метки.
+		\begin{figure}[h]
+			\centering
+			\includegraphics[width=0.5\textwidth]{crf.png}
+			\caption{Граф CRF на шаге $\mathit{t}$}
+		\end{figure}
+		\item Оценка последовательности меток $\mathbf{y}:$
+			$$\mathit{s}\left(\mathbf{x},\mathbf{y}\right)=\sum_{t=1}^{n+1}\left(\mathbf{A}_{y_{t-1},y_t}+\mathbf{P}_{t, y_t}\right),$$
+			$\mathbf{P}_{t, y_t}$ вычисляет оценку соответствия метки $\mathit{y_t}$ слову $\mathit{x_t}$ (в нашем случае $\mathbf{P}_{t, y_t}=\mathbf{W}_h\cdot\mathbf{h}+\mathbf{b}_h$), $\mathbf{A}$ -- матрица транзитивности.
+	\end{itemize}
+\end{frame}
+
+
+%-----------------------------------------------------------------------------------------------------
+\begin{frame}{}
+
+
+\begin{itemize}
+	\item Вероятность последовательности $\mathbf{y}:$
+		$$\mathbb{P}\{\mathbf{y}|\mathbf{x}\}=\frac{\prod_{n}\exp(\mathit{s}\left(\mathbf{x},\mathbf{y}\right))}{\sum_{\tilde{\mathbf{y}}\in\mathbf{Y}_{\mathbf{x}}}\prod_{n}\exp(\mathit{s}\left(\mathbf{x},\tilde{\mathbf{y}}\right))},$$
+		$\mathbf{Y}_{\mathbf{x}}$ -- всевозможные последовательности меток в предложении $\mathbf{x}$. 
+	\item Окончательно,
+		$$\mathit{y}^* = \underset{\tilde{\mathbf{y}}\in\mathbf{Y}_{\mathbf{x}}}{\text{argmax}} ~ \mathit{s}\left(\mathbf{x},\tilde{\mathbf{y}}\right)$$
+\end{itemize}
+
+\begin{block}{Важно}
+	CRF учитывают контекст на уровне предложений. Так, например, они предотвращают ситуации, когда метка \textsc{i-mut} возникает перед \textsc{b-mut} в пределах одной сущности или возникает сразу после \textsc{b-gene}.
+\end{block}
+
+\end{frame}
+%-----------------------------------------------------------------------------------------------------
+\begin{frame}{Char-level embeddings}
+	\begin{block}{Проблема}
+		 Много специфичных слов, не входящих в словарь $\mathbf{V}$ $\rightarrow	$ возникает проблема OOV (out of vocabulary) слов.
+	\end{block}
+
+	\begin{block}{Идея}
+		\begin{itemize}
+			\item Отдельно, с помощью BiLSTM, обучать векторные представления для символов (char-level embeddings), из которых состоит очередное слово.
+			\item Такой метод позволяет модели "приблизительно понять"\ , какую смысловую нагрузку несёт неизвестное слово.
+		\end{itemize}
+
+	\end{block}
+
+
+\end{frame}
+%-----------------------------------------------------------------------------------------------------
+\begin{frame}{Модель нейронной сети GMNet}
+	\begin{figure}[h]
+		\centering
+		\includegraphics[width=0.9\textwidth]{gmnet.png}
+		\captionsetup{justification=centering}
+		\caption{Архитектура нейронной сети GMNet, реализованной в данной работе}
+	\end{figure}
+
+	
+
+\end{frame}
+
+%-----------------------------------------------------------------------------------------------------
+\begin{frame}{Вычислительный эксперимент}
+\begin{center}
+	
+	\begin{table}[h]
+		\centering
+		%\begin{tabular}{l|l|l|l}
+		\begin{tabular}{cccc}
+			\hline Корпус & Кол-во генов & Кол-во мутаций & Кол-во предложений\\
+			\hline JNLPBA & 10589 & - & 22562\\
+			BC2GM & 24583 & - & 20510\\
+			\hline
+			MutationFinder & - & 5611 & 8176\\
+			tmVar & - & 3702 & 5956\\
+			\hline 
+		\end{tabular}
+		\label{Tab:2}
+	\end{table}
+	Наборы данных
+\end{center}
+
+\begin{columns}
+	\column{0.5\textwidth}
+	\begin{block}{Показатели качества}
+$$\textit{Precision}=\frac{\textit{TP}}{\textit{TP}+\textit{FP}},$$  $$\textit{Recall}=\frac{\textit{TP}}{\textit{TP}+\textit{FN}},$$
+$$\textit{F-measure}=\frac{2\cdot\textit{Precision}\cdot\textit{Recall}}{\textit{Precision}+\textit{Recall}}.$$
+	\end{block}
+	\column{0.55\textwidth}
+\begin{figure}[h]
+	\center{\includegraphics[width=1.08\linewidth]{examples.png}}
+	\captionsetup{justification=centering}
+\end{figure}
+\end{columns}
+
+%При обучении нейросети анализируются следующие показатели качества:
+%$$\textit{Precision}=\frac{\textit{TP}}{\textit{TP}+\textit{FP}}, ~~~~~~ %\textit{Recall}=\frac{\textit{TP}}{\textit{TP}+\textit{FN}}$$
+%$$\textit{F-measure}=\frac{2\cdot\textit{Precision}\cdot\textit{Recall}}{\textit{Precision}+\textit{Recall}}.$$
+\end{frame}
+%-----------------------------------------------------------------------------------------------------
+\begin{frame}{Результаты обучения на $15$ эпохах}
+\begin{figure}[h]
+	\begin{minipage}[h]{0.49\linewidth}
+		\center{\includegraphics[width=1\linewidth]{final_loss.png}}
+	\end{minipage}
+	\hfill
+	\begin{minipage}[h]{0.49\linewidth}
+		\center{\includegraphics[width=1\linewidth]{final_f.png}}
+	\end{minipage}
+	\label{ris:image1}
+	\captionsetup{justification=centering}
+	\caption{Слева: График зависимости функции потерь от числа эпох; Справа: График зависимости F-меры от числа эпох}
+\end{figure}
+\end{frame}
+
+%-----------------------------------------------------------------------------------------------------
+\begin{frame}{Пример работы модели}
+\begin{figure}[h]
+	\center{\includegraphics[width=0.7\linewidth]{results_final.png}}
+	\captionsetup{justification=centering}
+	\caption{Предсказания модели обозначены желтым цветом,\\ ground-truth разметка -- зеленым}
+\end{figure}
+\end{frame}
+%-----------------------------------------------------------------------------------------------------
+\begin{frame}{Сравнение с существующими методами}
+\begin{center}
+	\begin{table}[h]
+		\centering
+		%\begin{tabular}{l|l|l|l}
+		\begin{tabular}{cccc}
+			\hline Модель & Precision &  Recall & F-score \\
+			\hline Collabonet & 79.70 & 77.47 & 78.56 \\
+			BioBERT & 84.32 & 85.12 & 84.72 \\
+			Wang et al. 2018 & 81.11 & 78.91 & 80.00 \\
+			\hline
+			\textbf{GMNet}&   \textbf{81.59}&   \textbf{79.13} & \textbf{80.34}   \\
+			\hline 
+		\end{tabular}
+		\label{Tab:1}
+	\end{table}
+
+	\begin{table}[h]
+	\centering
+	%\begin{tabular}{l|l|l|l}
+	\begin{tabular}{cccc}
+		\hline Модель & Precision &  Recall & F-score \\
+		\hline tmVar & 94.96 & 79.01 & 86.25 \\
+		nala & 86.32 & 92.20 & 89.16 \\
+		SETH & 96.42 & 74.66 & 84.15 \\
+		\hline
+		\textbf{GMNet} &   \textbf{87.71}&   \textbf{86.48} & \textbf{87.09}   \\
+		\hline 
+	\end{tabular}
+	\label{Tab:2}
+\end{table}
+Сравнение результатов показателей качества существующих современных моделей с GMNet
+\end{center}
+\end{frame}
+%-----------------------------------------------------------------------------------------------------
+\begin{frame}{Выносится на защиту}
+\begin{block}{Полученные результаты}
+	\begin{itemize}
+		\item Разработана нейросетевая модель для решения задачи извлечения именованных сущностей генов и мутаций
+		\item Модель дает качество, сравнимое с существующими современными методами
+		\item Проведенные вычислительные эксперименты показывают состоятельность предложенного подхода
+	\end{itemize}
+\end{block}
+\begin{block}{Дальнейшие исследования}
+	\begin{itemize}
+		\item Использовать дополнительную информацию на уровне n-gramm
+		\item Использовать дополнительные признаки, такие как часть речи и регистр слова 
+	\end{itemize}
+\end{block}
+\end{frame}
+%----------------------------------------------------------------------------------------------------------
+\end{document} 

@@ -1,0 +1,52 @@
+This is BibTeX, Version 0.99d
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: Sotnikov2020BcSThesis.aux
+Reallocating 'name_of_file' (item size: 1) to 8 items.
+The style file: gost71s.bst
+Reallocating 'name_of_file' (item size: 1) to 6 items.
+Database file #1: mylib.bib
+Reallocating 'wiz_functions' (item size: 4) to 6000 items.
+Warning--empty journal in Lafferty01conditionalrandom
+Warning--empty journal in Sutton12anintroduction
+You've used 26 entries,
+            3062 wiz_defined-function locations,
+            863 strings with 10717 characters,
+and the built_in function-call counts, 12521 in all, are:
+= -- 1478
+> -- 402
+< -- 81
++ -- 129
+- -- 102
+* -- 848
+:= -- 1717
+add.period$ -- 104
+call.type$ -- 26
+change.case$ -- 115
+chr.to.int$ -- 0
+cite$ -- 28
+duplicate$ -- 555
+empty$ -- 990
+format.name$ -- 102
+if$ -- 3034
+int.to.chr$ -- 0
+int.to.str$ -- 26
+missing$ -- 0
+newline$ -- 178
+num.names$ -- 110
+pop$ -- 162
+preamble$ -- 1
+purify$ -- 89
+quote$ -- 76
+skip$ -- 521
+stack$ -- 0
+substring$ -- 773
+swap$ -- 260
+text.length$ -- 31
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 0
+warning$ -- 2
+while$ -- 79
+width$ -- 28
+write$ -- 474
+(There were 2 warnings)
